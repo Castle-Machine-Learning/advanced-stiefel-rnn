@@ -509,3 +509,8 @@ class GRU(object):
                 'dW': dW, 'dWu': dWu, 'dWr': dWr,
                 'dV': dV, 'dVu': dVu, 'dVr': dVr,
                 'db': db, 'dbu': dbu, 'dbr': dbr}
+
+
+class StiefelCell(object):
+    #TODO: Coming up.
+    pass
