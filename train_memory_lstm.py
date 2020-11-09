@@ -69,11 +69,11 @@ if __name__ == '__main__':
             out_lst.append(out)
 
         out_array = np.stack(out_lst, 1)
-        loss = cost.forward(label=y[:, -10:, :, :],
-                            out=out_array[:, -10:, :, :])
+        loss = cost.forward(label=y,
+                            out=out_array)
         deltay = np.zeros([batch_size, time_steps+20, n_sequence, 1])
-        deltay[:, -10:, :, :] = cost.backward(label=y[:, -10:, :, :],
-                                              out=out_array[:, -10:, :, :])
+        deltay = cost.backward(label=y,
+                               out=out_array)
 
         gd = {'deltah': cell.zero_state(batch_size),
               'deltac': cell.zero_state(batch_size),
