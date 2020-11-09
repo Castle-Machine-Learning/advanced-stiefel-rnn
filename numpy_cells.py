@@ -300,7 +300,7 @@ class BasicCell(object):
         self.Why = np.random.randn(1, output_size, hidden_size)
         self.Why = self.Why / np.sqrt(hidden_size)
         # hidden bias
-        self.bh = np.zeros((1, hidden_size, 1))
+        # self.bh = np.zeros((1, hidden_size, 1))
         # output bias
         self.by = np.random.randn(1, output_size, 1)
         self.activation = activation
@@ -322,7 +322,7 @@ class BasicCell(object):
             y (np.array): Cell output.
             h (np.array): Updated cell state.
         """
-        h = np.matmul(self.Whh, h) + np.matmul(self.Wxh, x) + self.bh
+        h = np.matmul(self.Whh, h) + np.matmul(self.Wxh, x) # + self.bh
         h = self.activation.forward(h)
         y = np.matmul(self.Why, h) + self.by
         return y, h
@@ -342,7 +342,6 @@ class BasicCell(object):
             deltah (np.array): Updated block deltas.
             dWhh (np.array): Recurrent weight matrix gradients.
             dWxh (np.array): Input weight matrix gradients
-            dbh (np.array): Bias gradients.
             dWhy (np.array):  Output projection matrix gradients.
             dby (np.array): Ouput bias gradients.
         """
@@ -355,10 +354,10 @@ class BasicCell(object):
         # recurrent backprop
         dWxh = np.matmul(delta, np.transpose(x, [0, 2, 1]))
         dWhh = np.matmul(delta, np.transpose(hm1, [0, 2, 1]))
-        dbh = 1*delta
+        # dbh = 1*delta
         deltah = np.matmul(np.transpose(self.Whh, [0, 2, 1]), delta)
         # deltah, dWhh, dWxh, dbh, dWhy, dby
-        return deltah, dWhh, dWxh, dbh, dWhy, dby
+        return deltah, dWhh, dWxh, dWhy, dby
 
     def update(self, grad_lst, lr, clip=1.):
         """ Do a basic SGD update step.
@@ -367,10 +366,9 @@ class BasicCell(object):
             grad_lst: A list with the numerical gradients over 
                       time.
         """
-        ldWhh, ldWxh, ldbh, ldWhy, ldby = zip(*grad_lst)
+        ldWhh, ldWxh, ldWhy, ldby = zip(*grad_lst)
         dWhh = np.stack(ldWhh, axis=0)
         dWxh = np.stack(ldWxh, axis=0)
-        dbh = np.stack(ldbh, axis=0)
         dWhy = np.stack(ldWhy, axis=0)
         dby = np.stack(ldby, axis=0)
         # backprop in time requires us to sum the gradients at each
@@ -379,14 +377,13 @@ class BasicCell(object):
         # clipping.
         dWhh = np.clip(np.sum(dWhh, axis=0), -clip, clip)
         dWxh = np.clip(np.sum(dWxh, axis=0), -clip, clip)
-        dbh = np.clip(np.sum(dbh, axis=0), -clip, clip)
+        # dbh = np.clip(np.sum(dbh, axis=0), -clip, clip)
         dWhy = np.clip(np.sum(dWhy, axis=0), -clip, clip)
         dby = np.clip(np.sum(dby, axis=0), -clip, clip)
 
         # update
         self.Whh += -lr*np.expand_dims(np.mean(dWhh, 0), 0)
         self.Wxh += -lr*np.expand_dims(np.mean(dWxh, 0), 0)
-        self.bh += -lr*np.expand_dims(np.mean(dbh, 0), 0)
         self.Why += -lr*np.expand_dims(np.mean(dWhy, 0), 0)
         self.by += -lr*np.expand_dims(np.mean(dby, 0), 0)
 
@@ -405,26 +402,26 @@ class StiefelCell(BasicCell):
         print('Whh norm', self.get_state_transition_norm())
 
 
-    def update(self, grad_lst, lr, clip=1.):
+    def update(self, grad_lst, lr, clip=None):
 
-        ldWhh, ldWxh, ldbh, ldWhy, ldby = zip(*grad_lst)
+        ldWhh, ldWxh, ldWhy, ldby = zip(*grad_lst)
         dWhh = np.stack(ldWhh, axis=0)
         dWxh = np.stack(ldWxh, axis=0)
-        dbh = np.stack(ldbh, axis=0)
+        # dbh = np.stack(ldbh, axis=0)
         dWhy = np.stack(ldWhy, axis=0)
         dby = np.stack(ldby, axis=0)
         # backprop in time requires us to sum the gradients at each
         # point in time.
 
         # clipping.
-        dWhh = np.clip(np.sum(dWhh, axis=0), -clip, clip)
-        dWxh = np.clip(np.sum(dWxh, axis=0), -clip, clip)
-        dbh = np.clip(np.sum(dbh, axis=0), -clip, clip)
-        dWhy = np.clip(np.sum(dWhy, axis=0), -clip, clip)
-        dby = np.clip(np.sum(dby, axis=0), -clip, clip)
+        dWhh = np.sum(dWhh, axis=0)
+        dWxh = np.sum(dWxh, axis=0)
+        dWhy = np.sum(dWhy, axis=0)
+        dby = np.sum(dby, axis=0)
 
         
         # stiefel-update
+        # http://noodle.med.yale.edu/~hdtag/notes/steifel_notes.pdf
         G = np.mean(dWhh, 0)
         W = np.squeeze(self.Whh, axis=0)
 
@@ -435,10 +432,10 @@ class StiefelCell(BasicCell):
         cayleyNumer = eye - (lr/2.0) * A
         C = np.matmul(np.linalg.inv(cayleyDenom), cayleyNumer)
         # import pdb;pdb.set_trace()
-        self.Whh = np.expand_dims(C, axis=0)
+        self.Whh = np.expand_dims(np.matmul(C, W), axis=0)
 
         # SGD updates.
         self.Wxh += -lr*np.expand_dims(np.mean(dWxh, 0), 0)
-        self.bh += -lr*np.expand_dims(np.mean(dbh, 0), 0)
+        # self.bh += -lr*np.expand_dims(np.mean(dbh, 0), 0)
         self.Why += -lr*np.expand_dims(np.mean(dWhy, 0), 0)
         self.by += -lr*np.expand_dims(np.mean(dby, 0), 0)

@@ -18,9 +18,9 @@ if __name__ == '__main__':
     # --- baseline ----------------------
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))
-    batch_size = 25
-    lr = 0.1
-    cell = StiefelCell(hidden_size=250, input_size=10, output_size=10)
+    batch_size = 50
+    lr = 0.001
+    cell = StiefelCell(hidden_size=128, input_size=10, output_size=10)
     sigmoid = Sigmoid()
 
     cost = CrossEntropyCost()
@@ -82,13 +82,13 @@ if __name__ == '__main__':
         grad_lst = []
         # backward
         for t in reversed(range(time_steps+20)):
-            deltah, dWhh, dWxh, dbh, dWhy, dby = \
+            deltah, dWhh, dWxh, dWhy, dby = \
                 cell.backward(deltay=deltay[:, t, :, :],
                               deltah=deltah,
                               x=x[:, t, :, :],
                               h=h_lst[t],
                               hm1=h_lst[t-1])
-            grad_lst.append([dWhh, dWxh, dbh, dWhy, dby])
+            grad_lst.append([dWhh, dWxh, dWhy, dby])
 
 
         # update
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         loss_lst.append(loss)
 
         if i % 500 == 0 and i > 0:
-            lr = lr * 0.98
+            lr = lr #* 0.98
             
             #res = np.squeeze(np.argmax(out_array, axis=2))
             #import pdb;pdb.set_trace()
