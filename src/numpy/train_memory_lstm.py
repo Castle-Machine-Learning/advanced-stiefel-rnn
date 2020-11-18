@@ -6,8 +6,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from generate_adding_memory import generate_data_memory
-from numpy_cells import LSTMcell, Sigmoid, CrossEntropyCost
+from src.generate_adding_memory import generate_data_memory
+from src.numpy.numpy_cells import LSTMcell, Sigmoid, CrossEntropyCost
 
 if __name__ == '__main__':
     n_train = int(40e5)
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))  # TODO: Fixme!
     batch_size = 100
-    lr = 0.1
+    lr = 1.0
     cell = LSTMcell(hidden_size=64, input_size=10, output_size=output_size)
     sigmoid = Sigmoid()
 

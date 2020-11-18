@@ -19,8 +19,8 @@ if __name__ == '__main__':
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))
     batch_size = 50
-    lr = 0.001
-    cell = StiefelCell(hidden_size=128, input_size=10, output_size=10)
+    lr = 0.1
+    cell = BasicCell(hidden_size=128, input_size=10, output_size=10)
     sigmoid = Sigmoid()
 
     cost = CrossEntropyCost()
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         loss_lst.append(loss)
 
         if i % 500 == 0 and i > 0:
-            lr = lr #* 0.98
+            lr = lr * 0.95
             
             #res = np.squeeze(np.argmax(out_array, axis=2))
             #import pdb;pdb.set_trace()

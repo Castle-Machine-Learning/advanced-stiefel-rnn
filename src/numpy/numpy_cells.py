@@ -291,18 +291,17 @@ class BasicCell(object):
                  activation=Tanh()):
         self.hidden_size = hidden_size
         # input to hidden
-        self.Wxh = np.random.randn(1, hidden_size, input_size)
-        self.Wxh = self.Wxh / np.sqrt(hidden_size)
+        s = 1. / np.sqrt(hidden_size)
+        #s = 0.01
+        self.Wxh = np.random.randn(1, hidden_size, input_size)*s
         # hidden to hidden
-        self.Whh = np.random.randn(1, hidden_size, hidden_size)
-        self.Whh = self.Whh / np.sqrt(hidden_size)
+        self.Whh = np.random.randn(1, hidden_size, hidden_size)*s
         # hidden to output
-        self.Why = np.random.randn(1, output_size, hidden_size)
-        self.Why = self.Why / np.sqrt(hidden_size)
+        self.Why = np.random.randn(1, output_size, hidden_size)*s
         # hidden bias
         # self.bh = np.zeros((1, hidden_size, 1))
         # output bias
-        self.by = np.random.randn(1, output_size, 1)
+        self.by = np.random.randn(1, output_size, 1)*0.
         self.activation = activation
 
     def zero_state(self, batch_size):
@@ -377,7 +376,6 @@ class BasicCell(object):
         # clipping.
         dWhh = np.clip(np.sum(dWhh, axis=0), -clip, clip)
         dWxh = np.clip(np.sum(dWxh, axis=0), -clip, clip)
-        # dbh = np.clip(np.sum(dbh, axis=0), -clip, clip)
         dWhy = np.clip(np.sum(dWhy, axis=0), -clip, clip)
         dby = np.clip(np.sum(dby, axis=0), -clip, clip)
 
@@ -425,17 +423,14 @@ class StiefelCell(BasicCell):
         G = np.mean(dWhh, 0)
         W = np.squeeze(self.Whh, axis=0)
 
-        # pdb.set_trace()
         eye = np.eye(self.hidden_size)
         A = np.matmul(G, np.transpose(W)) - np.matmul(W, np.transpose(G))
         cayleyDenom = eye + (lr/2.0) * A
         cayleyNumer = eye - (lr/2.0) * A
         C = np.matmul(np.linalg.inv(cayleyDenom), cayleyNumer)
-        # import pdb;pdb.set_trace()
         self.Whh = np.expand_dims(np.matmul(C, W), axis=0)
 
         # SGD updates.
         self.Wxh += -lr*np.expand_dims(np.mean(dWxh, 0), 0)
-        # self.bh += -lr*np.expand_dims(np.mean(dbh, 0), 0)
         self.Why += -lr*np.expand_dims(np.mean(dWhy, 0), 0)
         self.by += -lr*np.expand_dims(np.mean(dby, 0), 0)
