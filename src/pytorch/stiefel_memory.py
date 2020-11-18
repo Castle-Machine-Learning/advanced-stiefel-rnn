@@ -16,7 +16,7 @@ if __name__ == '__main__':
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))
     batch_size = 100
-    lr = 1e-2
+    lr = 3e-2
     cell = SimpleRecurrentCell(hidden_size=128, input_size=10)
     # cell = torch.nn.GRUCell(hidden_size=256, input_size=10)
     model = RecurrentLayer(cell=cell, output_size=10)
@@ -94,7 +94,9 @@ if __name__ == '__main__':
 
 
 plt.semilogy(loss_lst, label='loss')
-plt.semilogy(norm_lst, label='norm')
 plt.show()
 
+plt.title('orthogonality error')
+plt.semilogy(np.abs(1 - np.stack(norm_lst)))
+plt.show()
 print('done')
