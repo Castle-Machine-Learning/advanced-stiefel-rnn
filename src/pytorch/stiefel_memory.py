@@ -93,6 +93,8 @@ if __name__ == '__main__':
                     print('norm', 'nan')
 
 
-print('stop')
-plt.plot(loss_lst)
+plt.semilogy(loss_lst, label='loss')
+plt.semilogy(norm_lst, label='norm')
 plt.show()
+
+print('done')
