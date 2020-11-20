@@ -4,8 +4,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from generate_adding_memory import generate_data_adding
-from numpy_cells import LSTMcell, MSELoss
+from src.generate_adding_memory import generate_data_adding
+from src.numpy.numpy_cells import LSTMcell, MSELoss
+from src.numpy.opt import RMSprop
 
 if __name__ == '__main__':
     n_train = int(10e5)

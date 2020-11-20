@@ -16,11 +16,12 @@ if __name__ == '__main__':
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))
     batch_size = 100
-    lr = 3e-2
+    lr = 2e-2
     cell = SimpleRecurrentCell(hidden_size=128, input_size=10)
     # cell = torch.nn.GRUCell(hidden_size=256, input_size=10)
     model = RecurrentLayer(cell=cell, output_size=10)
-    optimizer = StiefelOptimizer(model.parameters(), lr=lr)
+    #optimizer = StiefelOptimizer(model.parameters(), lr=lr)
+    optimizer = torch.optim.RMSprop(model.parameters(), lr=lr)
 
     # cost = torch.nn.MSELoss()
 

@@ -2,14 +2,18 @@
 # This script trains a long short term memory cell on the
 # memory problem.
 # TODO: fixme.
-
 import numpy as np
 import matplotlib.pyplot as plt
 
 from src.generate_adding_memory import generate_data_memory
 from src.numpy.numpy_cells import LSTMcell, Sigmoid, CrossEntropyCost
+from src.numpy.opt import RMSprop, SGD
+
 
 if __name__ == '__main__':
+    import mkl
+    mkl.set_num_threads(8)
+
     n_train = int(40e5)
     n_test = int(1e4)
     time_steps = 2
@@ -20,10 +24,11 @@ if __name__ == '__main__':
     # --- baseline ----------------------
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))  # TODO: Fixme!
-    batch_size = 100
-    lr = 1.0
-    cell = LSTMcell(hidden_size=64, input_size=10, output_size=output_size)
+    batch_size = 50
+    lr = 0.001
+    cell = LSTMcell(hidden_size=128, input_size=10, output_size=output_size)
     sigmoid = Sigmoid()
+    optimizer = RMSprop(lr=lr)
 
     cost = CrossEntropyCost()
 
@@ -131,45 +136,21 @@ if __name__ == '__main__':
         dpf = np.stack(ldpf, axis=0)
         dpo = np.stack(ldpo, axis=0)
 
+        gd = {'Wout': dWout, 'bout': dbout,
+              'Wz': dWz, 'Wi': dWi, 'Wf': dWf, 'Wo': dWo,
+              'Rz': dRz, 'Ri': dRi, 'Rf': dRf, 'Ro': dRo,
+              'bz': dbz, 'bi': dbi, 'bf': dbf, 'bo': dbo,
+              'pi': dpi, 'pf': dpf, 'po': dpo}
+
         # backprop in time requires us to sum the gradients at each
         # point in time.
         # clipping prevents gradient explosion.
-        dWout = np.clip(np.sum(dWout, axis=0), -1.0, 1.0)
-        dbout = np.clip(np.sum(dbout, axis=0), -1.0, 1.0)
-        dWz = np.clip(np.sum(dWz, axis=0), -1.0, 1.0)
-        dWi = np.clip(np.sum(dWi, axis=0), -1.0, 1.0)
-        dWf = np.clip(np.sum(dWf, axis=0), -1.0, 1.0)
-        dWo = np.clip(np.sum(dWo, axis=0), -1.0, 1.0)
-        dRz = np.clip(np.sum(dRz, axis=0), -1.0, 1.0)
-        dRi = np.clip(np.sum(dRi, axis=0), -1.0, 1.0)
-        dRf = np.clip(np.sum(dRf, axis=0), -1.0, 1.0)
-        dRo = np.clip(np.sum(dRo, axis=0), -1.0, 1.0)
-        dbz = np.clip(np.sum(dbz, axis=0), -1.0, 1.0)
-        dbi = np.clip(np.sum(dbi, axis=0), -1.0, 1.0)
-        dbf = np.clip(np.sum(dbf, axis=0), -1.0, 1.0)
-        dbo = np.clip(np.sum(dbo, axis=0), -1.0, 1.0)
-        dpi = np.clip(np.sum(dpi, axis=0), -1.0, 1.0)
-        dpf = np.clip(np.sum(dpf, axis=0), -1.0, 1.0)
-        dpo = np.clip(np.sum(dpo, axis=0), -1.0, 1.0)
+        for key in gd.keys():
+            gd[key] = np.clip(np.sum(gd[key], axis=0), -1.0, 1.0)
+
 
         # update
-        cell.weights['Wout'] += -lr*np.expand_dims(np.mean(dWout, 0), 0)
-        cell.weights['bout'] += -lr*np.expand_dims(np.mean(dbout, 0), 0)
-        cell.weights['Wz'] += -lr*np.expand_dims(np.mean(dWz, 0), 0)
-        cell.weights['Wi'] += -lr*np.expand_dims(np.mean(dWi, 0), 0)
-        cell.weights['Wf'] += -lr*np.expand_dims(np.mean(dWf, 0), 0)
-        cell.weights['Wo'] += -lr*np.expand_dims(np.mean(dWo, 0), 0)
-        cell.weights['Rz'] += -lr*np.expand_dims(np.mean(dRz, 0), 0)
-        cell.weights['Ri'] += -lr*np.expand_dims(np.mean(dRi, 0), 0)
-        cell.weights['Rf'] += -lr*np.expand_dims(np.mean(dRf, 0), 0)
-        cell.weights['Ro'] += -lr*np.expand_dims(np.mean(dRo, 0), 0)
-        cell.weights['bz'] += -lr*np.expand_dims(np.mean(dbz, 0), 0)
-        cell.weights['bi'] += -lr*np.expand_dims(np.mean(dbi, 0), 0)
-        cell.weights['bf'] += -lr*np.expand_dims(np.mean(dbf, 0), 0)
-        cell.weights['bo'] += -lr*np.expand_dims(np.mean(dbo, 0), 0)
-        cell.weights['pi'] += -lr*np.expand_dims(np.mean(dpi, 0), 0)
-        cell.weights['pf'] += -lr*np.expand_dims(np.mean(dpf, 0), 0)
-        cell.weights['po'] += -lr*np.expand_dims(np.mean(dpo, 0), 0)
+        optimizer.step(cell, gd)
 
         if i % 10 == 0:
             print(i, 'loss', "%.4f" % loss, 'baseline', "%.4f" % baseline,
@@ -178,11 +159,13 @@ if __name__ == '__main__':
         loss_lst.append(loss)
 
         if i % 500 == 0 and i > 0:
-            lr = lr * 0.96
+            lr = lr * 1.
 
             # import pdb;pdb.set_trace()
-            print('net', y_net[0, -10:])
-            print('gt ', yy[0, -10:])
+            #print('net', y_net[0, -10:])
+            print('net', y_net[0, :])
+            #print('gt ', yy[0, -10:])
+            print('gt ', yy[0, :])
 
     print('net', y_net[0, -10:])
     print('gt ', yy[0, -10:])
