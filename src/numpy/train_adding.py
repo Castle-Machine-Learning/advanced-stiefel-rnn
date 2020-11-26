@@ -1,63 +1,54 @@
 # Created by moritz (wolter@cs.uni-bonn.de)
-# Use this script to train recurrent cells on the
-# memory problem.
+# This script trains a RNN cell on the adding problem using numpy.
 
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.numpy.generate_adding_memory import generate_data_memory
+from src.generate_adding_memory import generate_data_adding
 from src.numpy.numpy_cells import LSTMcell, GRU, BasicCell
-from src.numpy.numpy_cells import Sigmoid, CrossEntropyCost
+from src.numpy.numpy_cells import Sigmoid, MSELoss
 from src.numpy.opt import RMSprop
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Train an RNN on the memory problem.')
+        description='Train an RNN on the adding problem.')
     parser.add_argument('--cell_size', type=int, default=64,
                         help='RNN cell size')
     parser.add_argument('--cell_type', type=str, default='LSTM',
                         help='Cell type LSTM, GRU or Basic')
-    parser.add_argument('--time_steps', type=int, default=1,
+    parser.add_argument('--time_steps', type=int, default=20,
                         help='Time steps')
     parser.add_argument('--learning_rate', type=float,
                         default=0.01, help='Learning Rate')
     args = parser.parse_args()
     print(args)
 
-    n_train = int(40e5)
-    n_test = int(1e4)
     time_steps = args.time_steps
-    output_size = 10
-    n_sequence = 10
-    train_data = generate_data_memory(time_steps, n_train, n_sequence)
-    test_data = generate_data_memory(time_steps, n_test, n_sequence)
-    # --- baseline ----------------------
-    # baseline = np.log(8) * 10/(time_steps + 20)
-    # print("Baseline is " + str(baseline))
+    n_train = int(10e5)
+    n_test = int(1e4)
+    baseline = 0.167
     batch_size = 100
     lr = args.learning_rate
     if args.cell_type == 'LSTM':
         cell = LSTMcell(hidden_size=args.cell_size,
-                        input_size=10, output_size=output_size)
+                        input_size=2)
     elif args.cell_type == 'GRU':
         cell = GRU(hidden_size=args.cell_size,
-                   input_size=10, output_size=output_size)
+                   input_size=2)
     elif args.cell_type == 'Basic':
         cell = BasicCell(hidden_size=args.cell_size,
-                         input_size=10, output_size=output_size)
+                         input_size=2)
     else:
         raise ValueError("Unkown cell type.")
-
+    cost = MSELoss()
     opt = RMSprop(lr=lr)
-    sigmoid = Sigmoid()
 
-    print('Memory experiment started using:', type(cell), type(opt), 'lr', lr)
+    print('Adding experiment started using:', type(cell), type(opt), lr)
 
-    cost = CrossEntropyCost()
+    train_x, train_y = generate_data_adding(time_steps, n_train)
 
-    train_x, train_y = generate_data_memory(time_steps, n_train, n_sequence)
-    train_x_lst = np.array_split(train_x, n_train//batch_size, axis=0)
+    train_x_lst = np.array_split(train_x, n_train//batch_size, axis=1)
     train_y_lst = np.array_split(train_y, n_train//batch_size, axis=0)
 
     iterations = len(train_x_lst)
@@ -66,63 +57,40 @@ if __name__ == '__main__':
     # initialize cell state.
     fd0 = cell.zero_forward_dict(batch_size)
     loss_lst = []
-    acc_lst = []
     lr_lst = []
+
     # train cell
     for i in range(iterations):
-        xx = train_x_lst[i]
-        yy = train_y_lst[i]
+        x = train_x_lst[i]
+        y = train_y_lst[i]
 
-        x_one_hot = np.zeros([batch_size, 20+time_steps, n_sequence])
-        y_one_hot = np.zeros([batch_size, 20+time_steps, n_sequence])
-        # one hote encode the inputs.
-        for b in range(batch_size):
-            for t in range(20+time_steps):
-                x_one_hot[b, t, xx[b, t]] = 1
-                y_one_hot[b, t, yy[b, t]] = 1
+        x = np.expand_dims(x, -1)
+        y = np.expand_dims(y, -1)
 
-        x = np.expand_dims(x_one_hot, -1)
-        y = np.expand_dims(y_one_hot, -1)
-
-        out_lst = []
         fd_lst = []
         # forward
         fd = fd0
-        for t in range(time_steps+20):
-            fd = cell.forward(x=x[:, t, :, :],
+        for t in range(time_steps):
+            fd = cell.forward(x=x[t, :, :, :],
                               c=fd['c'], h=fd['h'])
             fd_lst.append(fd)
-            out = sigmoid.forward(fd['y'])
-            out_lst.append(out)
 
-        out_array = np.stack(out_lst, 1)
-        loss = cost.forward(label=y[:, :, :, :],
-                            out=out_array[:, :, :, :])
-        deltay = np.zeros([batch_size, time_steps+20, n_sequence, 1])
-        deltay = cost.backward(label=y[:, :, :, :],
-                               out=out_array[:, :, :, :])
+        loss = cost.forward(y, fd_lst[-1]['y'])
+        deltay = np.zeros((time_steps, batch_size, 1, 1))
+        deltay[-1, :, :, :] = cost.backward(y, fd_lst[-1]['y'])
+
         gd = cell.zero_gradient_dict(batch_size)
-        # compute accuracy
-        y_net = np.squeeze(np.argmax(out_array, axis=2))
-        mem_net = y_net[:, -10:]
-        mem_y = yy[:, -10:]
-        acc = np.sum((mem_y == mem_net).astype(np.float32))
-        acc = acc/(batch_size * 10.)
-        # import pdb;pdb.set_trace()
-        acc_lst.append(acc)
-
         gd_lst = []
         grad_lst = []
         # backward
         fd_lst.append(fd0)
-        for t in reversed(range(time_steps+20)):
-            gd = cell.backward(deltay=deltay[:, t, :, :],
+        for t in reversed(range(time_steps)):
+            gd = cell.backward(deltay=deltay[t, :, :, :],
                                fd=fd_lst[t],
                                next_fd=fd_lst[t+1],
                                prev_fd=fd_lst[t-1],
                                next_gd=gd)
             gd_lst.append(gd)
-
             # get the weight related gradients at the
             # current time step.
             current_grad_list = []
@@ -158,25 +126,23 @@ if __name__ == '__main__':
         opt.step(cell, gd)
 
         if i % 10 == 0:
-            print(i, 'ce loss', "%.4f" % loss,
-                  'acc', "%.4f" % acc, 'lr', "%.6f" % opt.lr,
+            print(i, 'mse loss', "%.4f" % loss, 'baseline', baseline,
+                  'lr', "%.6f" % lr,
                   'done', "%.3f" % (i/iterations))
         loss_lst.append(loss)
 
         if i % 500 == 0 and i > 0:
             opt.lr = opt.lr * 1.
+        lr_lst.append(lr)
 
-            # import pdb;pdb.set_trace()
-            print('net', y_net[0, :])
-            print('gt ', yy[0, :])
-
-    print('net', y_net[0, -10:])
-    print('gt ', yy[0, -10:])
+    # 0th batch marked inputs
+    print(x[x[:, 0, 1, 0] == 1., 0, 0, 0])
+    # desired output for all batches
+    print(y[:10, 0, 0])
+    # network output for all batches
+    print(fd['y'][:10, 0, 0])
     plt.semilogy(loss_lst)
-    plt.title('memory loss')
+    plt.title('loss adding problem')
     plt.xlabel('weight updates')
-    plt.ylabel('cross entropy')
-    plt.show()
-
-    plt.plot(acc_lst)
+    plt.ylabel('mean squared error')
     plt.show()

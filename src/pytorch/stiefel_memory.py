@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from src.generate_adding_memory import generate_data_memory
 from src.pytorch.stiefel_rnn import SimpleRecurrentCell, RecurrentLayer
 from src.pytorch.stiefel_optimizer import StiefelOptimizer
+from src.pytorch.recurrent_cells import CustomGRU
 
 if __name__ == '__main__':
     n_train = int(10e5)
@@ -16,8 +17,10 @@ if __name__ == '__main__':
     baseline = np.log(8) * 10/(time_steps + 20)
     print("Baseline is " + str(baseline))
     batch_size = 100
-    lr = 2e-2
-    cell = SimpleRecurrentCell(hidden_size=128, input_size=10)
+    lr = 0.001 #2e-2
+    # cell = SimpleRecurrentCell(hidden_size=128, input_size=10)
+    cell = CustomGRU(hidden_size=64, input_size=10)
+    cell.reset_parameters()
     # cell = torch.nn.GRUCell(hidden_size=256, input_size=10)
     model = RecurrentLayer(cell=cell, output_size=10)
     #optimizer = StiefelOptimizer(model.parameters(), lr=lr)
@@ -69,7 +72,7 @@ if __name__ == '__main__':
             # loss = cost(target=y, input=out_tensor)   
             loss = torch.mean(-y*torch.log(out_tensor + 1e-8)
                               - (1-y)*torch.log(1-out_tensor + 1e-8))
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
 
         loss_lst.append(loss.item())

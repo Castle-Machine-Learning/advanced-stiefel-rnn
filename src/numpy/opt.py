@@ -12,11 +12,11 @@ class SGD:
 
 
 class RMSprop(SGD):
-    def __init__(self, lr):
+    def __init__(self, lr=0.01, rho=0.99):
         super().__init__(lr)
-        print(self.lr)
-        self.delta = 1e-7
+        self.delta = 1e-6
         self.r = None
+        self.rho = rho
 
     def step(self, net, grads):
         param_keys = net.weights.keys()
@@ -29,6 +29,7 @@ class RMSprop(SGD):
 
         for weight_key in param_keys:
             cgrads = np.expand_dims(np.mean(grads[weight_key], 0), 0)
-            self.r[weight_key] += cgrads*cgrads
-            step_size = -self.lr / (self.delta + np.sqrt(self.r[weight_key]))
+            self.r[weight_key] = self.rho*self.r[weight_key] \
+                                + (1 - self.rho)*cgrads*cgrads
+            step_size = -self.lr / (np.sqrt(self.delta + self.r[weight_key]))
             net.weights[weight_key] += step_size*cgrads
