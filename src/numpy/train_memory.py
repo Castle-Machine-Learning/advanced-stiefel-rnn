@@ -3,20 +3,20 @@
 # memory problem.
 
 import argparse
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from src.numpy.generate_adding_memory import generate_data_memory
-from src.numpy.numpy_cells import LSTMcell, GRU, BasicCell
+from src.generate_adding_memory import generate_data_memory
+from src.numpy.numpy_cells import LSTMcell, GRU, BasicCell, ReLu
 from src.numpy.numpy_cells import Sigmoid, CrossEntropyCost
-from src.numpy.opt import RMSprop
+from src.numpy.opt import RMSprop, StiefelRMSopt
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Train an RNN on the memory problem.')
     parser.add_argument('--cell_size', type=int, default=64,
                         help='RNN cell size')
-    parser.add_argument('--cell_type', type=str, default='LSTM',
+    parser.add_argument('--cell_type', type=str, default='Stiefel',
                         help='Cell type LSTM, GRU or Basic')
     parser.add_argument('--time_steps', type=int, default=1,
                         help='Time steps')
@@ -46,10 +46,14 @@ if __name__ == '__main__':
     elif args.cell_type == 'Basic':
         cell = BasicCell(hidden_size=args.cell_size,
                          input_size=10, output_size=output_size)
+    elif  args.cell_type == 'Stiefel':
+        cell = BasicCell(hidden_size=args.cell_size,
+                         input_size=10, output_size=output_size,
+                         activation=ReLu(), stiefel=True)
     else:
         raise ValueError("Unkown cell type.")
 
-    opt = RMSprop(lr=lr)
+    opt = StiefelRMSopt(lr=lr)
     sigmoid = Sigmoid()
 
     print('Memory experiment started using:', type(cell), type(opt), 'lr', lr)
@@ -158,13 +162,15 @@ if __name__ == '__main__':
         opt.step(cell, gd)
 
         if i % 10 == 0:
-            print(i, 'ce loss', "%.4f" % loss,
+            print(i, 'ce loss', "%.6f" % loss,
                   'acc', "%.4f" % acc, 'lr', "%.6f" % opt.lr,
                   'done', "%.3f" % (i/iterations))
         loss_lst.append(loss)
 
-        if i % 500 == 0 and i > 0:
-            opt.lr = opt.lr * 1.
+        if i % 500 == 0:
+            # opt.lr = opt.lr * 1.
+            if type(cell) is BasicCell:
+                print('Whh norm', cell.get_state_transition_norm())
 
             # import pdb;pdb.set_trace()
             print('net', y_net[0, :])

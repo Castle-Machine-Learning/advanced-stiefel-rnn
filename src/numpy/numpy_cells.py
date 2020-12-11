@@ -4,6 +4,10 @@
 # and https://github.com/wiseodd/hipsternet/blob/master/hipsternet/neuralnet.py
 import numpy as np
 
+class StiefelArray(np.ndarray):
+    """ Rename a numpy array to mark it for
+        Stiefel optimization. """
+
 
 class CrossEntropyCost(object):
 
@@ -33,7 +37,7 @@ class ReLu(object):
         return inputs
 
     def backward(self, inputs, delta):
-        delta[delta <= 0] = 0
+        delta[inputs <= 0] = 0
         return delta
 
 
@@ -279,29 +283,41 @@ class BasicCell(object):
     """Basic (Elman) rnn cell."""
 
     def __init__(self, hidden_size=250, input_size=1, output_size=1,
-                 activation=Tanh()):
+                 activation=Tanh(), stiefel=False):
         self.hidden_size = hidden_size
         # input to hidden
-        s = 1. / np.sqrt(hidden_size)
+        stdv = 1.0 / np.sqrt(hidden_size)
         # s = 0.01
         self.weights = {}
-        self.weights['Wxh'] = np.random.randn(1, hidden_size, input_size)*s
+        shape = (1, hidden_size, input_size)
+        self.weights['Wxh'] = np.random.uniform(low=-stdv, high=stdv, size=shape)
         # hidden to hidden
-        self.weights['Whh'] = np.random.randn(1, hidden_size, hidden_size)*s
+        shape = (1, hidden_size, hidden_size)
+        self.weights['Whh'] = np.random.uniform(low=-stdv, high=stdv, size=shape)
         # hidden to output
-        self.weights['Why'] = np.random.randn(1, output_size, hidden_size)*s
+        shape = (1, output_size, hidden_size)
+        self.weights['Why'] = np.random.uniform(low=-stdv, high=stdv, size=shape)
         # hidden bias
-        # self.weights['bh ']= np.zeros((1, hidden_size, 1))
+        shape = (1, hidden_size, 1)
+        self.weights['bh'] = np.random.uniform(low=-stdv, high=stdv, size=shape)
         # output bias
-        self.weights['by'] = np.random.randn(1, output_size, 1)*0.
+        shape = (1, output_size, 1)
+        self.weights['by'] = np.random.uniform(low=-stdv, high=stdv, size=shape)
         self.activation = activation
         self.weight_keys = list(self.weights.keys())
+
+        if stiefel:
+            stiefel_Whh = StiefelArray([1, hidden_size, hidden_size])
+            U, S, Vh = np.linalg.svd(np.squeeze(self.weights['Whh']))
+            orth_Whh = np.matmul(U, Vh)
+            stiefel_Whh[:, :, :] = np.expand_dims(orth_Whh, 0)
+            self.weights['Whh'] = stiefel_Whh
 
     def zero_state(self, batch_size):
         return np.zeros((batch_size, self.hidden_size, 1))
 
     def get_state_transition_norm(self):
-        return np.linalg.norm(np.squeeze(self.Whh), ord=2)
+        return np.linalg.norm(np.squeeze(self.weights['Whh']), ord=2)
 
     def forward(self, x, h, c=None):
         """Basic Cell forward pass.
@@ -314,12 +330,12 @@ class BasicCell(object):
             y (np.array): Cell output.
             h (np.array): Updated cell state.
         """
-        h = np.matmul(self.weights['Whh'], h) \
-            + np.matmul(self.weights['Wxh'], x)
-        # + self.weights['bh']
-        h = self.activation.forward(h)
+        hbar = np.matmul(self.weights['Whh'], h) \
+            + np.matmul(self.weights['Wxh'], x) \
+            + self.weights['bh']
+        h = self.activation.forward(hbar)
         y = np.matmul(self.weights['Why'], h) + self.weights['by']
-        return {'y': y, 'h': h, 'x': x, 'c': None}
+        return {'y': y, 'h': h, 'hbar': hbar, 'x': x, 'c': None}
 
     # def backward(self, deltay, deltah, x, h, hm1):
     def backward(self, deltay, fd, prev_fd, next_fd, next_gd) -> {}:
@@ -347,22 +363,22 @@ class BasicCell(object):
         dWhy = np.matmul(deltay, np.transpose(fd['h'], [0, 2, 1]))
         dby = 1*deltay
 
-        delta = self.activation.backward(inputs=fd['h'], delta=dydh) \
-            + next_gd['deltah']
+        delta = self.activation.backward(inputs=fd['hbar'],
+            delta=dydh + next_gd['deltah'])
         # recurrent backprop
         dWxh = np.matmul(delta, np.transpose(fd['x'], [0, 2, 1]))
-        dWhh = np.matmul(delta, np.transpose(prev_fd['h'],
+        dWhh = np.matmul(delta, np.transpose(prev_fd['hbar'],
                          [0, 2, 1]))
-        # dbh = 1*delta
+        dbh = delta
         deltah = np.matmul(np.transpose(self.weights['Whh'],
                                         [0, 2, 1]), delta)
         # deltah, dWhh, dWxh, dbh, dWhy, dby
-        return {'deltah': deltah, 'dWhh': dWhh,
+        return {'deltah': deltah, 'dWhh': dWhh, 'dbh': dbh,
                 'dWxh': dWxh, 'dWhy': dWhy, 'dby': dby}
 
     def grad_to_weight_dict(self):
         """ Returns a dict mapping grad keys to weight keys. """
-        return {'Whh': 'dWhh', 'Wxh': 'dWxh',
+        return {'Whh': 'dWhh', 'Wxh': 'dWxh', 'bh': 'dbh',
                 'Why': 'dWhy', 'by': 'dby'}
 
     def zero_gradient_dict(self, batch_size):
@@ -372,6 +388,7 @@ class BasicCell(object):
     def zero_forward_dict(self, batch_size):
         """ Returns a forward dict filled with zeros. """
         return {'h': self.zero_state(batch_size),
+                'hbar': self.zero_state(batch_size),
                 'c': None}
 
 
